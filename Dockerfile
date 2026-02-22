@@ -56,10 +56,6 @@ COPY --from=builder /app/dist ./dist
 ENV DOCS_MCP_STORE_PATH=/data
 ENV XDG_CONFIG_HOME=/config
 
-# Define volumes
-VOLUME /data
-VOLUME /config
-
 # Expose the default port of the application
 EXPOSE 6280
 ENV PORT=6280
