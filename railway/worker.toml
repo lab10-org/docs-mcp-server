@@ -3,7 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "worker --host 0.0.0.0"
+startCommand = "node --enable-source-maps dist/index.js worker --host 0.0.0.0"
 healthcheckPath = "/api/ping"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
