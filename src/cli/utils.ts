@@ -290,13 +290,11 @@ export function validateAuthConfig(authConfig: AuthConfig): void {
   if (!authConfig.audience) {
     errors.push("--auth-audience is required when auth is enabled");
   } else {
-    // Audience can be any valid URI (URL or URN)
-    // Examples: https://api.example.com, urn:docs-mcp-server:api, urn:company:service
+    // Audience can be a URL, URN, or plain string (e.g., Supabase uses "authenticated").
+    // The actual JWT library (jose) performs the real audience matching at verification time.
     try {
-      // Try parsing as URL first (most common case)
       const url = new URL(authConfig.audience);
       if (url.protocol === "http:" && url.hostname !== "localhost") {
-        // Warn about HTTP in production but don't fail
         logger.warn(
           "⚠️  Audience uses HTTP protocol - consider using HTTPS for production",
         );
@@ -305,17 +303,14 @@ export function validateAuthConfig(authConfig: AuthConfig): void {
         errors.push("Audience must not contain URL fragments");
       }
     } catch {
-      // If not a valid URL, check if it's a valid URN
+      // Not a URL — accept URNs and plain strings (e.g., "authenticated")
       if (authConfig.audience.startsWith("urn:")) {
-        // Basic URN validation: urn:namespace:specific-string
         const urnParts = authConfig.audience.split(":");
         if (urnParts.length < 3 || !urnParts[1] || !urnParts[2]) {
           errors.push("URN audience must follow format: urn:namespace:specific-string");
         }
-      } else {
-        errors.push(
-          "Audience must be a valid absolute URL or URN (e.g., https://api.example.com or urn:company:service)",
-        );
+      } else if (!authConfig.audience.trim()) {
+        errors.push("Audience must not be empty");
       }
     }
   }
