@@ -80,6 +80,12 @@ export function createMcpCommand(cli: Argv) {
             description: "JWT audience claim (identifies this protected resource)",
             alias: "authAudience",
           })
+          .option("enable-api", {
+            type: "boolean",
+            description: "Also expose the tRPC API at /api alongside MCP endpoints",
+            default: false,
+            alias: "enableApi",
+          })
       );
     },
     async (argv) => {
@@ -172,7 +178,7 @@ export function createMcpCommand(cli: Argv) {
           const config = createAppServerConfig({
             enableWebInterface: false,
             enableMcpServer: true,
-            enableApiServer: false,
+            enableApiServer: !!argv.enableApi,
             enableWorker: !serverUrl,
             port: appConfig.server.ports.mcp,
             externalWorkerUrl: serverUrl,

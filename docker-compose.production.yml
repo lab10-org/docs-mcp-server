@@ -1,0 +1,72 @@
+# Docker Compose configuration for internet-facing production deployment.
+#
+# Exposes MCP endpoints (/sse, /mcp) and tRPC API (/api) with JWT auth.
+# Does NOT expose the Web UI — no /web/* routes, no static assets.
+#
+# Services:
+# - worker: Internal only, processes documentation jobs (no ports exposed to host)
+# - mcp: Public-facing, serves MCP + API with authentication
+#
+# Usage:
+#   cp .env.production.example .env
+#   # Edit .env with your real values
+#   docker compose -f docker-compose.production.yml up -d
+#
+services:
+  # Worker service - handles documentation processing (internal only)
+  worker:
+    image: ghcr.io/arabold/docs-mcp-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["worker", "--host", "0.0.0.0", "--port", "8080"]
+    restart: unless-stopped
+    # No 'ports:' — internal only, not accessible from internet
+    env_file:
+      - .env
+    healthcheck:
+      test: 'node -e ''require("net").connect(8080, "127.0.0.1").on("connect",()=>process.exit(0)).on("error",()=>process.exit(1))'''
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # MCP + API server - public-facing with authentication
+  mcp:
+    image: ghcr.io/arabold/docs-mcp-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - "mcp"
+      - "--protocol"
+      - "http"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "6280"
+      - "--server-url"
+      - "http://worker:8080/api"
+      - "--enable-api"
+      - "--auth-enabled"
+      - "--no-logo"
+    restart: unless-stopped
+    ports:
+      - "6280:6280"
+    env_file:
+      - .env
+    depends_on:
+      worker:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M

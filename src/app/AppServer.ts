@@ -9,7 +9,7 @@ import fastifyStatic from "@fastify/static";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { WebSocketServer } from "ws";
-import { ProxyAuthManager } from "../auth";
+import { createAuthMiddleware, ProxyAuthManager } from "../auth";
 import type { EventBusService } from "../events";
 import { RemoteEventProxy } from "../events/RemoteEventProxy";
 import type { IPipeline } from "../pipeline/trpc/interfaces";
@@ -415,6 +415,16 @@ export class AppServer {
    * Enable Pipeline RPC (tRPC) service.
    */
   private async enableTrpcApi(): Promise<void> {
+    // Protect /api with auth if enabled
+    if (this.appConfig.auth.enabled && this.authManager) {
+      const authMiddleware = createAuthMiddleware(this.authManager);
+      this.server.addHook("onRequest", async (request, reply) => {
+        if (request.url.startsWith("/api")) {
+          await authMiddleware(request, reply);
+        }
+      });
+    }
+
     await registerTrpcService(this.server, this.pipeline, this.docService, this.eventBus);
     logger.debug("API server (tRPC) enabled");
   }

@@ -1,0 +1,8 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "mcp --protocol http --host 0.0.0.0 --server-url $WORKER_URL --enable-api --auth-enabled --no-logo"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
