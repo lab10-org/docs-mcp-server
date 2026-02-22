@@ -44,6 +44,7 @@ export const DEFAULT_CONFIG = {
       web: 6281,
     },
     heartbeatMs: 30_000,
+    workerUrl: "",
   },
   auth: {
     enabled: false,
@@ -138,6 +139,7 @@ export const AppConfigSchema = z.object({
         })
         .default(DEFAULT_CONFIG.server.ports),
       heartbeatMs: z.coerce.number().int().default(DEFAULT_CONFIG.server.heartbeatMs),
+      workerUrl: z.string().default(DEFAULT_CONFIG.server.workerUrl),
     })
     .default(DEFAULT_CONFIG.server),
   auth: z
@@ -355,6 +357,7 @@ const configMappings: ConfigMapping[] = [
     env: ["DOCS_MCP_EMBEDDING_MODEL"],
     cli: "embeddingModel",
   },
+  { path: ["server", "workerUrl"], env: ["WORKER_URL"], cli: "serverUrl" },
   { path: ["auth", "enabled"], env: ["DOCS_MCP_AUTH_ENABLED"], cli: "authEnabled" },
   {
     path: ["auth", "issuerUrl"],

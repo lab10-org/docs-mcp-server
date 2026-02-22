@@ -135,7 +135,8 @@ export function createMcpCommand(cli: Argv) {
       }
 
       try {
-        const serverUrl = argv.serverUrl as string | undefined;
+        const serverUrl =
+          (argv.serverUrl as string | undefined) || appConfig.server.workerUrl;
 
         const eventBus = getEventBus(argv as CliContext);
 
