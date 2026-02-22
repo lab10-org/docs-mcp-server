@@ -1,4 +1,3 @@
-import path from "node:path";
 import { createFsFromVolume, vol } from "memfs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LibraryNotFoundInStoreError, VersionNotFoundInStoreError } from "./errors";
@@ -30,7 +29,7 @@ import envPaths from "env-paths";
 // Assign the actual implementation to the mocked function
 vi.mocked(envPaths).mockImplementation(mockEnvPathsFn);
 
-// Define the instance methods mock
+// Define the instance methods mock (implements IDocumentStore)
 const mockStore = {
   initialize: vi.fn(),
   shutdown: vi.fn(),
@@ -39,10 +38,24 @@ const mockStore = {
   queryLibraryVersions: vi.fn().mockResolvedValue(new Map<string, any[]>()),
   addDocuments: vi.fn(),
   deletePages: vi.fn(),
+  deletePage: vi.fn(),
+  getPagesByVersionId: vi.fn(),
+  removeVersion: vi.fn(),
+  getById: vi.fn(),
+  findByContent: vi.fn(),
+  findChildChunks: vi.fn(),
+  findPrecedingSiblingChunks: vi.fn(),
+  findSubsequentSiblingChunks: vi.fn(),
+  findParentChunk: vi.fn(),
+  findChunksByIds: vi.fn(),
+  findChunksByUrl: vi.fn(),
+  getActiveEmbeddingConfig: vi.fn().mockReturnValue(null),
   // Status tracking methods
   updateVersionStatus: vi.fn(),
   updateVersionProgress: vi.fn(),
   getVersionsByStatus: vi.fn(),
+  getVersionById: vi.fn(),
+  getLibraryById: vi.fn(),
   // Scraper options methods
   storeScraperOptions: vi.fn(),
   getScraperOptions: vi.fn(),
@@ -53,12 +66,10 @@ const mockStore = {
   deleteLibrary: vi.fn(),
 };
 
-// Mock the DocumentStore module
-vi.mock("./DocumentStore", () => {
-  // Create the mock constructor *inside* the factory function
-  const MockDocumentStore = vi.fn(() => mockStore);
-  return { DocumentStore: MockDocumentStore };
-});
+// Mock the DocumentStoreFactory to return our mock store
+vi.mock("./DocumentStoreFactory", () => ({
+  createDocumentStore: vi.fn(() => mockStore),
+}));
 
 import { EventBusService } from "../events";
 import { loadConfig } from "../utils/config";
@@ -123,7 +134,7 @@ describe("DocumentManagementService", () => {
     // Initialize the main service instance used by most tests
     // This will now use memfs for its internal fs calls
     const eventBus = new EventBusService();
-    docService = new DocumentManagementService(eventBus, appConfig);
+    docService = new DocumentManagementService(eventBus, appConfig, mockStore as any);
   });
 
   afterEach(async () => {
@@ -1054,7 +1065,11 @@ describe("DocumentManagementService", () => {
     describe("cleanup", () => {
       it("should shutdown without errors", async () => {
         const eventBus = new EventBusService();
-        const service = new DocumentManagementService(eventBus, appConfig);
+        const service = new DocumentManagementService(
+          eventBus,
+          appConfig,
+          mockStore as any,
+        );
 
         // Should complete shutdown without errors
         await expect(service.shutdown()).resolves.not.toThrow();

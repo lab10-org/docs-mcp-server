@@ -1,4 +1,3 @@
-import path from "node:path";
 import Fuse from "fuse.js";
 import semver from "semver";
 import type { EventBusService } from "../events";
@@ -12,13 +11,13 @@ import type { AppConfig } from "../utils/config";
 import { logger } from "../utils/logger";
 import { sortVersionsDescending } from "../utils/version";
 import { DocumentRetrieverService } from "./DocumentRetrieverService";
-import { DocumentStore } from "./DocumentStore";
 import type { EmbeddingModelConfig } from "./embeddings/EmbeddingConfig";
 import {
   LibraryNotFoundInStoreError,
   StoreError,
   VersionNotFoundInStoreError,
 } from "./errors";
+import type { IDocumentStore } from "./IDocumentStore";
 import type {
   DbVersionWithLibrary,
   FindVersionResult,
@@ -36,27 +35,15 @@ import type {
  */
 export class DocumentManagementService {
   private readonly appConfig: AppConfig;
-  private readonly store: DocumentStore;
+  private readonly store: IDocumentStore;
   private readonly documentRetriever: DocumentRetrieverService;
   private readonly pipelines: ContentPipeline[];
   private readonly eventBus: EventBusService;
 
-  constructor(eventBus: EventBusService, appConfig: AppConfig) {
+  constructor(eventBus: EventBusService, appConfig: AppConfig, store: IDocumentStore) {
     this.appConfig = appConfig;
     this.eventBus = eventBus;
-    const storePath = this.appConfig.app.storePath;
-    if (!storePath) {
-      throw new Error("storePath is required when not using a remote server");
-    }
-    // Handle special :memory: case for in-memory databases (primarily for testing)
-    const dbPath =
-      storePath === ":memory:" ? ":memory:" : path.join(storePath, "documents.db");
-
-    logger.debug(`Using database path: ${dbPath}`);
-
-    // Directory creation is handled by the centralized path resolution
-
-    this.store = new DocumentStore(dbPath, this.appConfig);
+    this.store = store;
     this.documentRetriever = new DocumentRetrieverService(this.store, this.appConfig);
 
     // Initialize content pipelines for different content types including universal TextPipeline fallback

@@ -1,4 +1,4 @@
-import type { DocumentStore } from "../DocumentStore";
+import type { IDocumentStore } from "../IDocumentStore";
 import type { DbPageChunk } from "../types";
 
 /**
@@ -29,7 +29,7 @@ export interface ContentAssemblyStrategy {
     library: string,
     version: string,
     initialChunks: DbPageChunk[],
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<DbPageChunk[]>;
 
   /**

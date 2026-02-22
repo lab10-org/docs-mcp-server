@@ -103,6 +103,15 @@ export const DEFAULT_CONFIG = {
     subsequentSiblingsLimit: 2,
     maxChunkDistance: 3,
   },
+  storage: {
+    provider: "sqlite" as const,
+    supabase: {
+      url: "",
+      serviceRoleKey: "",
+      connectionString: "",
+      schema: "",
+    },
+  },
 } as const;
 
 // --- Configuration Schema (Nested) ---
@@ -281,6 +290,23 @@ export const AppConfigSchema = z.object({
         .default(DEFAULT_CONFIG.assembly.maxChunkDistance),
     })
     .default(DEFAULT_CONFIG.assembly),
+  storage: z
+    .object({
+      provider: z.enum(["sqlite", "supabase"]).default(DEFAULT_CONFIG.storage.provider),
+      supabase: z
+        .object({
+          url: z.string().default(DEFAULT_CONFIG.storage.supabase.url),
+          serviceRoleKey: z
+            .string()
+            .default(DEFAULT_CONFIG.storage.supabase.serviceRoleKey),
+          connectionString: z
+            .string()
+            .default(DEFAULT_CONFIG.storage.supabase.connectionString),
+          schema: z.string().default(DEFAULT_CONFIG.storage.supabase.schema),
+        })
+        .default(DEFAULT_CONFIG.storage.supabase),
+    })
+    .default(DEFAULT_CONFIG.storage),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -339,6 +365,28 @@ const configMappings: ConfigMapping[] = [
     path: ["auth", "audience"],
     env: ["DOCS_MCP_AUTH_AUDIENCE"],
     cli: "authAudience",
+  },
+  // Storage provider
+  {
+    path: ["storage", "provider"],
+    env: ["DOCS_MCP_STORAGE_PROVIDER"],
+    cli: "storageProvider",
+  },
+  {
+    path: ["storage", "supabase", "url"],
+    env: ["SUPABASE_URL"],
+  },
+  {
+    path: ["storage", "supabase", "serviceRoleKey"],
+    env: ["SUPABASE_SERVICE_ROLE_KEY"],
+  },
+  {
+    path: ["storage", "supabase", "connectionString"],
+    env: ["DATABASE_URL"],
+  },
+  {
+    path: ["storage", "supabase", "schema"],
+    env: ["SUPABASE_SCHEMA"],
   },
   // Add other mappings as needed for CLI/Env overrides
 ];

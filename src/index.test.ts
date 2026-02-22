@@ -29,10 +29,12 @@ vi.mock("./app", () => ({
 }));
 
 vi.mock("./store/DocumentManagementService", () => ({
-  DocumentManagementService: vi.fn().mockImplementation((_eventBus, _appConfig) => ({
-    initialize: mockDocServiceInitialize,
-    shutdown: mockDocServiceShutdown,
-  })),
+  DocumentManagementService: vi
+    .fn()
+    .mockImplementation((_eventBus, _appConfig, _store) => ({
+      initialize: mockDocServiceInitialize,
+      shutdown: mockDocServiceShutdown,
+    })),
 }));
 
 vi.mock("./pipeline/PipelineFactory", () => ({
@@ -279,7 +281,7 @@ describe("Service Configuration Validation", () => {
 
     // Simulate the service initialization sequence
     const eventBus = new EventBusService();
-    const docService = new DocumentManagementService(eventBus, appConfig);
+    const docService = new DocumentManagementService(eventBus, appConfig, {} as any);
     await docService.initialize();
 
     const pipeline = await PipelineFactory.createPipeline(docService, eventBus, {

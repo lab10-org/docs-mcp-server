@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type AppConfig, loadConfig } from "../../../utils/config";
-import type { DocumentStore } from "../../DocumentStore";
+import type { IDocumentStore } from "../../IDocumentStore";
 import type { DbPageChunk } from "../../types";
 import { MarkdownAssemblyStrategy } from "./MarkdownAssemblyStrategy";
 
@@ -12,7 +12,7 @@ const createMockDocumentStore = () =>
     findSubsequentSiblingChunks: vi.fn().mockResolvedValue([]),
     findChildChunks: vi.fn().mockResolvedValue([]),
     findChunksByIds: vi.fn().mockResolvedValue([]),
-  }) as Partial<DocumentStore> as DocumentStore;
+  }) as Partial<IDocumentStore> as IDocumentStore;
 
 // Test fixtures - creating a "document universe"
 const createDocumentUniverse = () => {
@@ -113,7 +113,7 @@ const createDocumentUniverse = () => {
 
 describe("MarkdownAssemblyStrategy", () => {
   let strategy: MarkdownAssemblyStrategy;
-  let mockStore: DocumentStore;
+  let mockStore: IDocumentStore;
   let config: AppConfig;
   let universe: ReturnType<typeof createDocumentUniverse>;
 

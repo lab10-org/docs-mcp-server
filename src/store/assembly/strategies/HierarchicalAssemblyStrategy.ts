@@ -1,7 +1,7 @@
 import type { AppConfig } from "../../../utils/config";
 import { logger } from "../../../utils/logger";
 import { MimeTypeUtils } from "../../../utils/mimeTypeUtils";
-import type { DocumentStore } from "../../DocumentStore";
+import type { IDocumentStore } from "../../IDocumentStore";
 import type { DbPageChunk } from "../../types";
 import type { ContentAssemblyStrategy } from "../types";
 
@@ -48,7 +48,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     library: string,
     version: string,
     initialChunks: DbPageChunk[],
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<DbPageChunk[]> {
     if (initialChunks.length === 0) {
       return [];
@@ -201,7 +201,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     library: string,
     version: string,
     chunk: DbPageChunk,
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<string[]> {
     const chainIds: string[] = [];
     const visited = new Set<string>();
@@ -258,7 +258,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     version: string,
     url: string,
     path: string[],
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<DbPageChunk | null> {
     if (path.length <= 1) {
       return null; // Already at or near root
@@ -303,7 +303,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     version: string,
     url: string,
     targetPath: string[],
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<DbPageChunk[]> {
     try {
       // Get all chunks from the same document URL
@@ -342,7 +342,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     library: string,
     version: string,
     chunk: DbPageChunk,
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<DbPageChunk | null> {
     let current: DbPageChunk | null = chunk;
 
@@ -375,7 +375,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     library: string,
     version: string,
     documentChunks: DbPageChunk[],
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<string[]> {
     const chunkIds = new Set<string>();
 
@@ -459,7 +459,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     version: string,
     referenceChunk: DbPageChunk,
     ancestorPath: string[],
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<string[]> {
     const containerIds: string[] = [];
 
@@ -495,7 +495,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     version: string,
     url: string,
     path: string[],
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<DbPageChunk[]> {
     try {
       // For root path, return empty - no specific chunks to find
@@ -539,7 +539,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     library: string,
     version: string,
     rootChunk: DbPageChunk,
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<string[]> {
     const subtreeIds: string[] = [];
     const visited = new Set<string>();
@@ -579,7 +579,7 @@ export class HierarchicalAssemblyStrategy implements ContentAssemblyStrategy {
     library: string,
     version: string,
     initialChunks: DbPageChunk[],
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<DbPageChunk[]> {
     const chunkIds = new Set<string>();
 

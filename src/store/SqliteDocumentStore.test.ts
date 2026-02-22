@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ScrapeResult } from "../scraper/types";
 import type { Chunk } from "../splitter/types";
 import { loadConfig } from "../utils/config";
-import { DocumentStore } from "./DocumentStore";
 import { EmbeddingConfig } from "./embeddings/EmbeddingConfig";
 import { VersionStatus } from "./types";
 
@@ -104,11 +103,11 @@ function createScrapeResult(
 }
 
 /**
- * Tests for DocumentStore with embeddings enabled
+ * Tests for SqliteDocumentStore with embeddings enabled
  * Uses explicit embedding configuration and tests hybrid search functionality
  */
-describe("DocumentStore - With Embeddings", () => {
-  let store: DocumentStore;
+describe("SqliteDocumentStore - With Embeddings", () => {
+  let store: SqliteDocumentStore;
 
   beforeEach(async () => {
     // Create explicit embedding configuration for tests
@@ -120,7 +119,7 @@ describe("DocumentStore - With Embeddings", () => {
     appConfig.app.embeddingModel = embeddingConfig.modelSpec;
 
     // Create a fresh in-memory database for each test with explicit config
-    store = new DocumentStore(":memory:", appConfig);
+    store = new SqliteDocumentStore(":memory:", appConfig);
     await store.initialize();
   });
 
@@ -855,11 +854,11 @@ describe("DocumentStore - With Embeddings", () => {
 });
 
 /**
- * Tests for DocumentStore without embeddings (FTS-only mode)
+ * Tests for SqliteDocumentStore without embeddings (FTS-only mode)
  * Tests the fallback behavior when no embedding configuration is provided
  */
-describe("DocumentStore - Without Embeddings (FTS-only)", () => {
-  let store: DocumentStore;
+describe("SqliteDocumentStore - Without Embeddings (FTS-only)", () => {
+  let store: SqliteDocumentStore;
   let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
@@ -884,12 +883,12 @@ describe("DocumentStore - Without Embeddings (FTS-only)", () => {
 
   describe("Initialization without embeddings", () => {
     it("should initialize successfully without embedding credentials", async () => {
-      store = new DocumentStore(":memory:", appConfig);
+      store = new SqliteDocumentStore(":memory:", appConfig);
       await expect(store.initialize()).resolves.not.toThrow();
     });
 
     it("should store documents without vectorization", async () => {
-      store = new DocumentStore(":memory:", appConfig);
+      store = new SqliteDocumentStore(":memory:", appConfig);
       await store.initialize();
 
       await expect(
@@ -913,7 +912,7 @@ describe("DocumentStore - Without Embeddings (FTS-only)", () => {
 
   describe("FTS-only Search", () => {
     beforeEach(async () => {
-      store = new DocumentStore(":memory:", appConfig);
+      store = new SqliteDocumentStore(":memory:", appConfig);
       await store.initialize();
 
       await store.addDocuments(
@@ -982,8 +981,8 @@ describe("DocumentStore - Without Embeddings (FTS-only)", () => {
  * Common tests that work in both embedding and non-embedding modes
  * These tests focus on core database functionality
  */
-describe("DocumentStore - Common Functionality", () => {
-  let store: DocumentStore;
+describe("SqliteDocumentStore - Common Functionality", () => {
+  let store: SqliteDocumentStore;
 
   // Use embeddings for these tests
   beforeEach(async () => {
@@ -991,7 +990,7 @@ describe("DocumentStore - Common Functionality", () => {
       "openai:text-embedding-3-small",
     );
     appConfig.app.embeddingModel = embeddingConfig.modelSpec;
-    store = new DocumentStore(":memory:", appConfig);
+    store = new SqliteDocumentStore(":memory:", appConfig);
     await store.initialize();
   });
 
@@ -1005,7 +1004,7 @@ describe("DocumentStore - Common Functionality", () => {
     it("should return null when no embedding config is provided", async () => {
       // Create a store without embedding config (FTS-only mode)
       appConfig.app.embeddingModel = "";
-      const ftsOnlyStore = new DocumentStore(":memory:", appConfig);
+      const ftsOnlyStore = new SqliteDocumentStore(":memory:", appConfig);
       await ftsOnlyStore.initialize();
 
       const config = ftsOnlyStore.getActiveEmbeddingConfig();

@@ -1,6 +1,6 @@
 import type { AppConfig } from "../../../utils/config";
 import { MimeTypeUtils } from "../../../utils/mimeTypeUtils";
-import type { DocumentStore } from "../../DocumentStore";
+import type { IDocumentStore } from "../../IDocumentStore";
 import type { DbPageChunk } from "../../types";
 import type { ContentAssemblyStrategy } from "../types";
 
@@ -55,7 +55,7 @@ export class MarkdownAssemblyStrategy implements ContentAssemblyStrategy {
     library: string,
     version: string,
     initialChunks: DbPageChunk[],
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<DbPageChunk[]> {
     const allChunkIds = new Set<string>();
 
@@ -95,7 +95,7 @@ export class MarkdownAssemblyStrategy implements ContentAssemblyStrategy {
     library: string,
     version: string,
     doc: DbPageChunk,
-    documentStore: DocumentStore,
+    documentStore: IDocumentStore,
   ): Promise<Set<string>> {
     const id = doc.id;
     const relatedIds = new Set<string>();

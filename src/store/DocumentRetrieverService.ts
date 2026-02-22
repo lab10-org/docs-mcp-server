@@ -1,13 +1,13 @@
 import type { AppConfig } from "../utils/config";
 import { createContentAssemblyStrategy } from "./assembly/ContentAssemblyStrategyFactory";
-import type { DocumentStore } from "./DocumentStore";
+import type { IDocumentStore } from "./IDocumentStore";
 import type { DbChunkRank, DbPageChunk, StoreSearchResult } from "./types";
 
 export class DocumentRetrieverService {
-  private documentStore: DocumentStore;
+  private documentStore: IDocumentStore;
   private config: AppConfig;
 
-  constructor(documentStore: DocumentStore, config: AppConfig) {
+  constructor(documentStore: IDocumentStore, config: AppConfig) {
     this.documentStore = documentStore;
     this.config = config;
   }

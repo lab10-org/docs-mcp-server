@@ -2,12 +2,16 @@ import type { EventBusService } from "../events";
 import type { AppConfig } from "../utils/config";
 import { DocumentManagementClient } from "./DocumentManagementClient";
 import { DocumentManagementService } from "./DocumentManagementService";
+import { createDocumentStore } from "./DocumentStoreFactory";
 import type { IDocumentManagement } from "./trpc/interfaces";
 
 export * from "./DocumentManagementClient";
 export * from "./DocumentManagementService";
 export * from "./DocumentStore";
+export * from "./DocumentStoreFactory";
 export * from "./errors";
+export * from "./IDocumentStore";
+export * from "./SqliteDocumentStore";
 export * from "./trpc/interfaces";
 
 /** Factory to create a document management implementation */
@@ -22,12 +26,14 @@ export async function createDocumentManagement(options: {
     return client as IDocumentManagement;
   }
 
-  const storePath = options.appConfig.app.storePath;
-  if (!storePath) {
-    throw new Error("storePath is required when not using a remote server");
-  }
+  const store = await createDocumentStore(options.appConfig);
+  await store.initialize();
 
-  const service = new DocumentManagementService(options.eventBus, options.appConfig);
+  const service = new DocumentManagementService(
+    options.eventBus,
+    options.appConfig,
+    store,
+  );
   await service.initialize();
   return service as IDocumentManagement;
 }
@@ -40,12 +46,10 @@ export async function createLocalDocumentManagement(
   eventBus: EventBusService,
   appConfig: AppConfig,
 ) {
-  const storePath = appConfig.app.storePath;
-  if (!storePath) {
-    throw new Error("storePath is required when not using a remote server");
-  }
+  const store = await createDocumentStore(appConfig);
+  await store.initialize();
 
-  const service = new DocumentManagementService(eventBus, appConfig);
+  const service = new DocumentManagementService(eventBus, appConfig, store);
   await service.initialize();
   return service;
 }
