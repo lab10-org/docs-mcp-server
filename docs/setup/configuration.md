@@ -222,6 +222,28 @@ Settings for the vector embedding generation.
 | `batchSize` | `100` | Number of chunks to embed in one request. |
 | `vectorDimension` | `1536` | Dimension of the vector space (must match model). |
 
+### Storage (`storage`)
+
+Settings for the data storage backend.
+
+| Option | Default | Description |
+|:-------|:--------|:------------|
+| `provider` | `sqlite` | Storage backend to use (`sqlite` or `supabase`). |
+| `supabase.url` | - | Supabase project URL. Env: `SUPABASE_URL`. |
+| `supabase.serviceRoleKey` | - | Supabase service role key. Env: `SUPABASE_SERVICE_ROLE_KEY`. |
+| `supabase.connectionString` | - | PostgreSQL connection string. Env: `DATABASE_URL`. |
+| `supabase.schema` | - | PostgreSQL schema name. When set, all tables are created in this schema instead of `public`. Env: `SUPABASE_SCHEMA`. |
+
+**Example: Supabase with custom schema**
+
+```bash
+export DOCS_MCP_STORAGE_PROVIDER=supabase
+export DATABASE_URL="postgresql://user:pass@db.example.com:5432/postgres"
+export SUPABASE_SCHEMA=docs_prod
+```
+
+When `schema` is set, the server automatically creates the schema if it doesn't exist and routes all queries to it via `search_path`. This allows multiple deployments to share the same database (e.g., `docs_prod` and `docs_staging`).
+
 ### Database (`db`)
 
 Internal database settings.

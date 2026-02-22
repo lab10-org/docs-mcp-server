@@ -69,6 +69,24 @@ OPENAI_API_KEY="sk-proj-..." npx @arabold/docs-mcp-server@latest
 
 See **[Embedding Models](docs/guides/embedding-models.md)** for configuring **Ollama**, **Gemini**, **Azure**, and others.
 
+### 🗄️ Storage Provider
+
+By default, data is stored locally using **SQLite**. For team or cloud deployments, you can switch to **Supabase (PostgreSQL)**:
+
+```bash
+DOCS_MCP_STORAGE_PROVIDER=supabase \
+DATABASE_URL="postgresql://user:pass@host:5432/db" \
+npx @arabold/docs-mcp-server@latest
+```
+
+You can optionally isolate tables into a custom PostgreSQL schema:
+
+```bash
+SUPABASE_SCHEMA=docs_prod
+```
+
+See **[Configuration](docs/setup/configuration.md)** for the full storage reference.
+
 ---
 
 ## 📚 Documentation
