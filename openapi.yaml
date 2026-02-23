@@ -1,0 +1,1194 @@
+openapi: 3.1.0
+info:
+  title: Docs MCP Server API
+  version: 2.0.4
+  description: |
+    tRPC HTTP API for the Docs MCP Server by Lab10.
+
+    This API is the internal RPC surface between the MCP service and the worker,
+    and can also be consumed by external clients. It exposes pipeline job management,
+    document/library data operations, and real-time event subscriptions.
+
+    ## tRPC HTTP conventions
+
+    All procedures are exposed under the `/api` prefix.
+
+    - **Queries** use `GET /api/<procedure>?input=<url-encoded-json>`.
+      Input is encoded via superjson. Procedures with no input omit the query parameter.
+    - **Mutations** use `POST /api/<procedure>` with `Content-Type: application/json`
+      and body `{ "json": <input> }`.
+    - **Successful responses** are wrapped in `{ "result": { "data": { "json": <output> } } }`.
+    - **Error responses** return `{ "error": { "json": { "message": "...", "code": <TRPC_ERROR_CODE> } } }`.
+    - The transformer is **superjson**, so `Date` values are serialized with extra metadata.
+
+    ## Authentication
+
+    Authentication is optional and controlled by the `DOCS_MCP_AUTH_ENABLED` environment variable.
+    When enabled, all endpoints require a Bearer JWT in the `Authorization` header.
+
+    ## WebSocket subscriptions
+
+    The `events.subscribe` procedure uses WebSocket transport (upgrade on `/api`).
+    It emits real-time events of type `JOB_STATUS_CHANGE`, `JOB_PROGRESS`,
+    `LIBRARY_CHANGE`, and `JOB_LIST_CHANGE`. See the Events tag for details.
+  contact:
+    name: Lab10
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: "{baseUrl}"
+    description: Server base URL
+    variables:
+      baseUrl:
+        default: http://localhost:3010
+
+security:
+  - BearerAuth: []
+  - {}
+
+tags:
+  - name: Health
+    description: Health check endpoint
+  - name: Pipeline
+    description: Job management — enqueue, query, and cancel scraping/refresh jobs
+  - name: Data Store
+    description: Document and library operations — search, list, and manage versions
+  - name: Events
+    description: |
+      Real-time event subscriptions via WebSocket.
+
+      The `events.subscribe` procedure is a tRPC subscription available over WebSocket
+      (upgrade on `/api`). It accepts an optional filter of event types
+      (`JOB_STATUS_CHANGE`, `JOB_PROGRESS`, `LIBRARY_CHANGE`, `JOB_LIST_CHANGE`)
+      and emits `{ type, payload }` messages. This cannot be represented as a
+      standard HTTP endpoint and is documented here for reference only.
+
+paths:
+  # ──────────────────────────────────────────────
+  # Health
+  # ──────────────────────────────────────────────
+  /api/ping:
+    get:
+      operationId: ping
+      tags: [Health]
+      summary: Health check
+      description: Returns server status and current timestamp.
+      parameters: []
+      responses:
+        "200":
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_Ping"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  # ──────────────────────────────────────────────
+  # Pipeline
+  # ──────────────────────────────────────────────
+  /api/enqueueScrapeJob:
+    post:
+      operationId: enqueueScrapeJob
+      tags: [Pipeline]
+      summary: Enqueue a scrape job
+      description: |
+        Creates a new scraping job for the given library/version.
+        The job is added to the pipeline queue and processed asynchronously.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInput_EnqueueScrapeJob"
+      responses:
+        "200":
+          description: Job enqueued successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_EnqueueJob"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/enqueueRefreshJob:
+    post:
+      operationId: enqueueRefreshJob
+      tags: [Pipeline]
+      summary: Enqueue a refresh job
+      description: |
+        Creates a refresh job that re-indexes an existing library/version
+        using conditional requests (ETags) to skip unchanged pages.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInput_EnqueueRefreshJob"
+      responses:
+        "200":
+          description: Job enqueued successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_EnqueueJob"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/getJob:
+    get:
+      operationId: getJob
+      tags: [Pipeline]
+      summary: Get a single job by ID
+      description: |
+        Returns full details for a specific pipeline job.
+
+        Query input: `?input={"json":{"id":"<jobId>"}}`
+      parameters:
+        - $ref: "#/components/parameters/TrpcQueryInput"
+      responses:
+        "200":
+          description: Job details (or null if not found)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_GetJob"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/getJobs:
+    get:
+      operationId: getJobs
+      tags: [Pipeline]
+      summary: List jobs
+      description: |
+        Returns all pipeline jobs, optionally filtered by status.
+        Input is optional; omit the `input` query parameter to list all jobs.
+
+        Query input: `?input={"json":{"status":"running"}}`
+      parameters:
+        - $ref: "#/components/parameters/TrpcQueryInputOptional"
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_GetJobs"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/cancelJob:
+    post:
+      operationId: cancelJob
+      tags: [Pipeline]
+      summary: Cancel a running job
+      description: |
+        Requests cancellation of a job. The job transitions to `cancelling`
+        and eventually to `cancelled` once the worker acknowledges it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInput_JobId"
+      responses:
+        "200":
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_Success"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/clearCompletedJobs:
+    post:
+      operationId: clearCompletedJobs
+      tags: [Pipeline]
+      summary: Clear completed jobs
+      description: |
+        Removes all jobs in terminal states (completed, failed, cancelled)
+        from the in-memory job list. No request body required.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInputEmpty"
+      responses:
+        "200":
+          description: Number of jobs cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_ClearCompletedJobs"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  # ──────────────────────────────────────────────
+  # Data Store
+  # ──────────────────────────────────────────────
+  /api/listLibraries:
+    get:
+      operationId: listLibraries
+      tags: [Data Store]
+      summary: List all libraries
+      description: Returns all libraries with their version summaries.
+      parameters: []
+      responses:
+        "200":
+          description: Array of library summaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_ListLibraries"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/findBestVersion:
+    get:
+      operationId: findBestVersion
+      tags: [Data Store]
+      summary: Find best matching version
+      description: |
+        Uses semver matching to find the best available version for a library.
+        Also indicates whether unversioned content exists.
+
+        Query input: `?input={"json":{"library":"react","targetVersion":"18"}}`
+      parameters:
+        - $ref: "#/components/parameters/TrpcQueryInput"
+      responses:
+        "200":
+          description: Best matching version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_FindBestVersion"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/validateLibraryExists:
+    post:
+      operationId: validateLibraryExists
+      tags: [Data Store]
+      summary: Validate library exists
+      description: |
+        Checks that a library exists in the store. Throws a tRPC error
+        if the library is not found.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInput_Library"
+      responses:
+        "200":
+          description: Library exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_Ok"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/search:
+    get:
+      operationId: search
+      tags: [Data Store]
+      summary: Search documents
+      description: |
+        Performs hybrid vector + full-text search across documents
+        in a specific library/version.
+
+        Query input: `?input={"json":{"library":"react","query":"hooks","limit":10}}`
+      parameters:
+        - $ref: "#/components/parameters/TrpcQueryInput"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_Search"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/removeVersion:
+    post:
+      operationId: removeVersion
+      tags: [Data Store]
+      summary: Remove a version
+      description: Removes a library version and all its associated documents.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInput_LibraryVersion"
+      responses:
+        "200":
+          description: Version removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_Ok"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/removeAllDocuments:
+    post:
+      operationId: removeAllDocuments
+      tags: [Data Store]
+      summary: Remove all documents for a version
+      description: Deletes all document chunks for a specific library/version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInput_LibraryVersion"
+      responses:
+        "200":
+          description: Documents removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_Ok"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/getVersionsByStatus:
+    get:
+      operationId: getVersionsByStatus
+      tags: [Data Store]
+      summary: Get versions by status
+      description: |
+        Returns all versions matching any of the given status values.
+
+        Query input: `?input={"json":{"statuses":["running","queued"]}}`
+      parameters:
+        - $ref: "#/components/parameters/TrpcQueryInput"
+      responses:
+        "200":
+          description: Matching versions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_GetVersionsByStatus"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/findVersionsBySourceUrl:
+    get:
+      operationId: findVersionsBySourceUrl
+      tags: [Data Store]
+      summary: Find versions by source URL
+      description: |
+        Returns all versions that were originally scraped from the given URL.
+
+        Query input: `?input={"json":{"url":"https://example.com/docs"}}`
+      parameters:
+        - $ref: "#/components/parameters/TrpcQueryInput"
+      responses:
+        "200":
+          description: Matching versions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_FindVersionsBySourceUrl"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/getScraperOptions:
+    get:
+      operationId: getScraperOptions
+      tags: [Data Store]
+      summary: Get stored scraper options
+      description: |
+        Returns the scraper configuration stored for a specific version.
+
+        Query input: `?input={"json":{"versionId":42}}`
+      parameters:
+        - $ref: "#/components/parameters/TrpcQueryInput"
+      responses:
+        "200":
+          description: Scraper options (or null if not stored)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_GetScraperOptions"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/updateVersionStatus:
+    post:
+      operationId: updateVersionStatus
+      tags: [Data Store]
+      summary: Update version status
+      description: Updates the indexing status of a version, with an optional error message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInput_UpdateVersionStatus"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_Ok"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/updateVersionProgress:
+    post:
+      operationId: updateVersionProgress
+      tags: [Data Store]
+      summary: Update version progress
+      description: Updates the scraping progress counters for a version being indexed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInput_UpdateVersionProgress"
+      responses:
+        "200":
+          description: Progress updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_Ok"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+  /api/storeScraperOptions:
+    post:
+      operationId: storeScraperOptions
+      tags: [Data Store]
+      summary: Store scraper options
+      description: Persists scraper configuration for a version so it can be reused for refresh jobs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrpcMutationInput_StoreScraperOptions"
+      responses:
+        "200":
+          description: Options stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrpcResponse_Ok"
+        "400":
+          $ref: "#/components/responses/TrpcError"
+
+components:
+  # ──────────────────────────────────────────────
+  # Security Schemes
+  # ──────────────────────────────────────────────
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Optional Bearer JWT authentication. Only enforced when the server
+        is started with `DOCS_MCP_AUTH_ENABLED=true`.
+
+  # ──────────────────────────────────────────────
+  # Reusable Responses
+  # ──────────────────────────────────────────────
+  responses:
+    TrpcError:
+      description: |
+        tRPC error response. Common codes:
+        -32600 (BAD_REQUEST), -32603 (INTERNAL_SERVER_ERROR), -32004 (NOT_FOUND).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TrpcError"
+
+  # ──────────────────────────────────────────────
+  # Parameters
+  # ──────────────────────────────────────────────
+  parameters:
+    TrpcQueryInput:
+      name: input
+      in: query
+      required: true
+      description: URL-encoded JSON input (superjson serialized)
+      schema:
+        type: string
+      example: '{"json":{"library":"react"}}'
+    TrpcQueryInputOptional:
+      name: input
+      in: query
+      required: false
+      description: Optional URL-encoded JSON input (superjson serialized)
+      schema:
+        type: string
+      example: '{"json":{"status":"running"}}'
+
+  # ──────────────────────────────────────────────
+  # Schemas
+  # ──────────────────────────────────────────────
+  schemas:
+    # ── tRPC envelope ────────────────────────────
+
+    TrpcError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            json:
+              type: object
+              properties:
+                message:
+                  type: string
+                code:
+                  type: integer
+                  description: "tRPC error code (e.g. -32600 BAD_REQUEST, -32603 INTERNAL_SERVER_ERROR, -32004 NOT_FOUND)"
+              required: [message, code]
+          required: [json]
+      required: [error]
+
+    TrpcMutationInputEmpty:
+      type: object
+      description: Empty mutation body (no input required)
+
+    # ── Enums ────────────────────────────────────
+
+    PipelineJobStatus:
+      type: string
+      enum:
+        - queued
+        - running
+        - completed
+        - failed
+        - cancelling
+        - cancelled
+
+    VersionStatus:
+      type: string
+      enum:
+        - not_indexed
+        - queued
+        - running
+        - completed
+        - failed
+        - cancelled
+        - updating
+
+    ScrapeMode:
+      type: string
+      enum: [fetch, playwright, auto]
+
+    # ── Domain objects ───────────────────────────
+
+    ScraperProgressEvent:
+      type: object
+      properties:
+        pagesScraped:
+          type: integer
+        totalPages:
+          type: integer
+        totalDiscovered:
+          type: integer
+        currentUrl:
+          type: string
+        depth:
+          type: integer
+        maxDepth:
+          type: integer
+      required: [pagesScraped, totalPages, totalDiscovered, currentUrl, depth, maxDepth]
+
+    PipelineJob:
+      type: object
+      properties:
+        id:
+          type: string
+        library:
+          type: string
+        version:
+          type: ["string", "null"]
+        status:
+          $ref: "#/components/schemas/PipelineJobStatus"
+        progress:
+          oneOf:
+            - $ref: "#/components/schemas/ScraperProgressEvent"
+            - type: "null"
+        error:
+          oneOf:
+            - type: object
+              properties:
+                message:
+                  type: string
+              required: [message]
+            - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: ["string", "null"]
+          format: date-time
+        finishedAt:
+          type: ["string", "null"]
+          format: date-time
+        versionId:
+          type: integer
+        versionStatus:
+          $ref: "#/components/schemas/VersionStatus"
+        progressPages:
+          type: integer
+        progressMaxPages:
+          type: integer
+        errorMessage:
+          type: ["string", "null"]
+        updatedAt:
+          type: string
+          format: date-time
+        sourceUrl:
+          type: ["string", "null"]
+        scraperOptions:
+          oneOf:
+            - $ref: "#/components/schemas/ScraperOptions"
+            - type: "null"
+      required: [id, library, version, status, progress, error, createdAt, startedAt, finishedAt, sourceUrl, scraperOptions]
+
+    ScraperOptions:
+      type: object
+      description: Full scraper configuration used at runtime
+      properties:
+        url:
+          type: string
+        library:
+          type: string
+        version:
+          type: string
+        maxPages:
+          type: integer
+        maxDepth:
+          type: integer
+        scope:
+          type: string
+          enum: [subpages, hostname, domain]
+        followRedirects:
+          type: boolean
+        maxConcurrency:
+          type: integer
+        ignoreErrors:
+          type: boolean
+        excludeSelectors:
+          type: array
+          items:
+            type: string
+        includePatterns:
+          type: array
+          items:
+            type: string
+        excludePatterns:
+          type: array
+          items:
+            type: string
+        scrapeMode:
+          $ref: "#/components/schemas/ScrapeMode"
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+      required: [url, library, version]
+
+    VersionScraperOptions:
+      type: object
+      description: Stored scraper options (excludes runtime-only fields like url, library, version)
+      properties:
+        maxPages:
+          type: integer
+        maxDepth:
+          type: integer
+        scope:
+          type: string
+          enum: [subpages, hostname, domain]
+        followRedirects:
+          type: boolean
+        maxConcurrency:
+          type: integer
+        ignoreErrors:
+          type: boolean
+        excludeSelectors:
+          type: array
+          items:
+            type: string
+        includePatterns:
+          type: array
+          items:
+            type: string
+        excludePatterns:
+          type: array
+          items:
+            type: string
+        scrapeMode:
+          $ref: "#/components/schemas/ScrapeMode"
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    StoredScraperOptions:
+      type: object
+      properties:
+        sourceUrl:
+          type: string
+        options:
+          $ref: "#/components/schemas/VersionScraperOptions"
+      required: [sourceUrl, options]
+
+    VersionRef:
+      type: object
+      properties:
+        library:
+          type: string
+        version:
+          type: string
+          description: Empty string for unversioned content
+      required: [library, version]
+
+    VersionSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        ref:
+          $ref: "#/components/schemas/VersionRef"
+        status:
+          $ref: "#/components/schemas/VersionStatus"
+        progress:
+          type: object
+          properties:
+            pages:
+              type: integer
+            maxPages:
+              type: integer
+          required: [pages, maxPages]
+        counts:
+          type: object
+          properties:
+            documents:
+              type: integer
+            uniqueUrls:
+              type: integer
+          required: [documents, uniqueUrls]
+        indexedAt:
+          type: ["string", "null"]
+          format: date-time
+        sourceUrl:
+          type: ["string", "null"]
+      required: [id, ref, status, counts, indexedAt]
+
+    LibrarySummary:
+      type: object
+      properties:
+        library:
+          type: string
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/VersionSummary"
+      required: [library, versions]
+
+    FindVersionResult:
+      type: object
+      properties:
+        bestMatch:
+          type: ["string", "null"]
+        hasUnversioned:
+          type: boolean
+      required: [bestMatch, hasUnversioned]
+
+    StoreSearchResult:
+      type: object
+      properties:
+        url:
+          type: string
+        content:
+          type: string
+        score:
+          type: ["number", "null"]
+        mimeType:
+          type: ["string", "null"]
+      required: [url, content, score]
+
+    DbVersionWithLibrary:
+      type: object
+      properties:
+        id:
+          type: integer
+        library_id:
+          type: integer
+        name:
+          type: ["string", "null"]
+          description: Version name. NULL for unversioned content.
+        created_at:
+          type: string
+        status:
+          $ref: "#/components/schemas/VersionStatus"
+        progress_pages:
+          type: integer
+        progress_max_pages:
+          type: integer
+        error_message:
+          type: ["string", "null"]
+        started_at:
+          type: ["string", "null"]
+        updated_at:
+          type: string
+        source_url:
+          type: ["string", "null"]
+        scraper_options:
+          type: ["string", "null"]
+          description: JSON-serialized VersionScraperOptions
+        library_name:
+          type: string
+      required:
+        - id
+        - library_id
+        - name
+        - created_at
+        - status
+        - progress_pages
+        - progress_max_pages
+        - error_message
+        - started_at
+        - updated_at
+        - source_url
+        - scraper_options
+        - library_name
+
+    # ── Mutation input schemas ───────────────────
+
+    TrpcMutationInput_EnqueueScrapeJob:
+      type: object
+      properties:
+        json:
+          type: object
+          properties:
+            library:
+              type: string
+              minLength: 1
+            version:
+              type: ["string", "null"]
+              description: Omit or pass null for unversioned
+            options:
+              $ref: "#/components/schemas/ScraperOptions"
+          required: [library, options]
+      required: [json]
+
+    TrpcMutationInput_EnqueueRefreshJob:
+      type: object
+      properties:
+        json:
+          type: object
+          properties:
+            library:
+              type: string
+              minLength: 1
+            version:
+              type: ["string", "null"]
+          required: [library]
+      required: [json]
+
+    TrpcMutationInput_JobId:
+      type: object
+      properties:
+        json:
+          type: object
+          properties:
+            id:
+              type: string
+              minLength: 1
+          required: [id]
+      required: [json]
+
+    TrpcMutationInput_Library:
+      type: object
+      properties:
+        json:
+          type: object
+          properties:
+            library:
+              type: string
+              minLength: 1
+          required: [library]
+      required: [json]
+
+    TrpcMutationInput_LibraryVersion:
+      type: object
+      properties:
+        json:
+          type: object
+          properties:
+            library:
+              type: string
+              minLength: 1
+            version:
+              type: ["string", "null"]
+          required: [library]
+      required: [json]
+
+    TrpcMutationInput_UpdateVersionStatus:
+      type: object
+      properties:
+        json:
+          type: object
+          properties:
+            versionId:
+              type: integer
+              minimum: 1
+            status:
+              type: string
+            errorMessage:
+              type: ["string", "null"]
+          required: [versionId, status]
+      required: [json]
+
+    TrpcMutationInput_UpdateVersionProgress:
+      type: object
+      properties:
+        json:
+          type: object
+          properties:
+            versionId:
+              type: integer
+              minimum: 1
+            pages:
+              type: integer
+              minimum: 0
+            maxPages:
+              type: integer
+              minimum: 1
+          required: [versionId, pages, maxPages]
+      required: [json]
+
+    TrpcMutationInput_StoreScraperOptions:
+      type: object
+      properties:
+        json:
+          type: object
+          properties:
+            versionId:
+              type: integer
+              minimum: 1
+            options:
+              description: Scraper options object to persist
+          required: [versionId, options]
+      required: [json]
+
+    # ── Response wrappers ────────────────────────
+
+    TrpcResponse_Ping:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: object
+                  properties:
+                    status:
+                      type: string
+                      example: ok
+                    ts:
+                      type: integer
+                      description: Unix timestamp in milliseconds
+                  required: [status, ts]
+
+    TrpcResponse_EnqueueJob:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: object
+                  properties:
+                    jobId:
+                      type: string
+                  required: [jobId]
+
+    TrpcResponse_GetJob:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  oneOf:
+                    - $ref: "#/components/schemas/PipelineJob"
+                    - type: "null"
+
+    TrpcResponse_GetJobs:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: object
+                  properties:
+                    jobs:
+                      type: array
+                      items:
+                        $ref: "#/components/schemas/PipelineJob"
+                  required: [jobs]
+
+    TrpcResponse_Success:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: object
+                  properties:
+                    success:
+                      type: boolean
+                      const: true
+                  required: [success]
+
+    TrpcResponse_Ok:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: object
+                  properties:
+                    ok:
+                      type: boolean
+                      const: true
+                  required: [ok]
+
+    TrpcResponse_ClearCompletedJobs:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: object
+                  properties:
+                    count:
+                      type: integer
+                      description: Number of jobs removed
+                  required: [count]
+
+    TrpcResponse_ListLibraries:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/LibrarySummary"
+
+    TrpcResponse_FindBestVersion:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  $ref: "#/components/schemas/FindVersionResult"
+
+    TrpcResponse_Search:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/StoreSearchResult"
+
+    TrpcResponse_GetVersionsByStatus:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/DbVersionWithLibrary"
+
+    TrpcResponse_FindVersionsBySourceUrl:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/DbVersionWithLibrary"
+
+    TrpcResponse_GetScraperOptions:
+      type: object
+      properties:
+        result:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                json:
+                  oneOf:
+                    - $ref: "#/components/schemas/StoredScraperOptions"
+                    - type: "null"
